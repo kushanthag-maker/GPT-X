@@ -12,7 +12,7 @@ const config = require("./config");
 
 global.plugins = [];
 
-// Load plugins
+// 🔥 LOAD PLUGINS
 function loadPlugins() {
     global.plugins = [];
     const files = fs.readdirSync("./plugins").filter(f => f.endsWith(".js"));
@@ -22,11 +22,12 @@ function loadPlugins() {
         const plugin = require(`./plugins/${file}`);
         global.plugins.push(plugin);
     }
+
+    console.log("📦 Plugins Loaded:", global.plugins.length);
 }
 
 loadPlugins();
 
-// 🔥 AUTO RECONNECT SAFE START
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
     const { version } = await fetchLatestBaileysVersion();
@@ -35,34 +36,45 @@ async function startBot() {
         version,
         auth: state,
         printQRInTerminal: false,
-        logger: P({ level: "silent" })
+
+        // 🔥 IMPORTANT: FULL LOG ENABLE
+        logger: P({
+            level: "debug"   // 👈 ALL LOGS SHOW
+        })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔥 CONNECTION FIX (AUTO RECONNECT)
+    // 🔥 CONNECTION LOGS
     sock.ev.on("connection.update", (update) => {
+        console.log("🔄 CONNECTION UPDATE:", update);
+
         const { connection, lastDisconnect } = update;
 
         if (connection === "open") {
-            console.log("🤖 GPT-X BOT ACTIVE");
+            console.log("✅ BOT ONLINE - GPT-X ACTIVE");
         }
 
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
 
+            console.log("❌ CLOSED CODE:", statusCode);
+
             const shouldReconnect =
                 statusCode !== DisconnectReason.loggedOut;
 
-            console.log("❌ Disconnected. Reconnecting:", shouldReconnect);
+            console.log("♻️ RECONNECT:", shouldReconnect);
 
             if (shouldReconnect) startBot();
         }
     });
 
-    // 🔥 MESSAGE FIX (PUBLIC CHAT WORKING)
+    // 🔥 MESSAGE LOG SYSTEM (IMPORTANT FIX)
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
+
+        console.log("\n📩 NEW RAW MESSAGE:");
+        console.log(JSON.stringify(msg, null, 2)); // 👈 FULL MESSAGE LOG
 
         if (!msg.message) return;
         if (msg.key.fromMe) return;
@@ -74,12 +86,13 @@ async function startBot() {
             msg.message.extendedTextMessage?.text ||
             "";
 
-        // DEBUG (important)
-        console.log("📩 New Message:", body);
+        console.log("💬 MESSAGE TEXT:", body); // 👈 TEXT LOG
 
         for (const plugin of global.plugins) {
             try {
                 if (body.toLowerCase().startsWith(plugin.name)) {
+                    console.log("⚡ COMMAND TRIGGERED:", plugin.name);
+
                     await plugin.execute({
                         socket: sock,
                         msg,
@@ -89,10 +102,12 @@ async function startBot() {
                     });
                 }
             } catch (e) {
-                console.log("❌ Plugin Error:", e.message);
+                console.log("❌ PLUGIN ERROR:", e.message);
             }
         }
     });
+
+    console.log("🚀 BOT STARTING...");
 }
 
 startBot();
