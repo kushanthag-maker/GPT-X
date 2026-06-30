@@ -36,17 +36,17 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: true,
         logger: P({ level: "silent" })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔥 CONNECTION FIX + AUTO RECONNECT
+    // 🔄 CONNECTION HANDLER
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update;
 
-        console.log("🔄 Connection Update:", connection);
+        console.log("🔄 Connection:", connection);
 
         if (connection === "open") {
             console.log("🤖 GPT-X BOT ONLINE");
@@ -55,18 +55,19 @@ async function startBot() {
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
 
-            console.log("❌ Disconnected Code:", statusCode);
+            console.log("❌ Disconnected:", statusCode);
 
             const shouldReconnect =
                 statusCode !== DisconnectReason.loggedOut;
 
-            console.log("♻️ Reconnecting:", shouldReconnect);
-
-            if (shouldReconnect) startBot();
+            if (shouldReconnect) {
+                console.log("♻️ Reconnecting...");
+                startBot();
+            }
         }
     });
 
-    // 🔥 MESSAGE HANDLER (FIXED)
+    // 📩 MESSAGE HANDLER (FIXED)
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
 
@@ -82,20 +83,21 @@ async function startBot() {
 
         console.log("\n📩 MESSAGE:", body);
 
-        // 🔥 PREFIX SYSTEM FIX
-        const prefix = ".";
+        const prefix = config.PREFIX || ".";
 
         if (!body.startsWith(prefix)) return;
 
-        const command = body.slice(prefix.length).trim().toLowerCase();
+        const command = body
+            .slice(prefix.length)
+            .trim()
+            .toLowerCase();
 
-        console.log("⚡ COMMAND DETECTED:", command);
+        console.log("⚡ COMMAND:", command);
 
-        // 🔥 PLUGIN EXECUTION
         for (const plugin of global.plugins) {
             try {
                 if (plugin.name === command) {
-                    console.log("✅ EXECUTING:", command);
+                    console.log("✅ EXEC:", command);
 
                     await plugin.execute({
                         socket: sock,
@@ -106,7 +108,7 @@ async function startBot() {
                     });
                 }
             } catch (e) {
-                console.log("❌ PLUGIN ERROR:", e.message);
+                console.log("❌ ERROR:", e.message);
             }
         }
     });
