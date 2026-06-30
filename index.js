@@ -12,9 +12,10 @@ const config = require("./config");
 
 global.plugins = [];
 
-// 🔥 LOAD PLUGINS
+// 📦 LOAD PLUGINS
 function loadPlugins() {
     global.plugins = [];
+
     const files = fs.readdirSync("./plugins").filter(f => f.endsWith(".js"));
 
     for (const file of files) {
@@ -23,7 +24,7 @@ function loadPlugins() {
         global.plugins.push(plugin);
     }
 
-    console.log("📦 Plugins Loaded:", global.plugins.length);
+    console.log("📦 Plugins Loaded:", global.plugins.map(p => p.name));
 }
 
 loadPlugins();
@@ -36,45 +37,38 @@ async function startBot() {
         version,
         auth: state,
         printQRInTerminal: false,
-
-        // 🔥 IMPORTANT: FULL LOG ENABLE
-        logger: P({
-            level: "debug"   // 👈 ALL LOGS SHOW
-        })
+        logger: P({ level: "silent" })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔥 CONNECTION LOGS
+    // 🔥 CONNECTION FIX + AUTO RECONNECT
     sock.ev.on("connection.update", (update) => {
-        console.log("🔄 CONNECTION UPDATE:", update);
-
         const { connection, lastDisconnect } = update;
 
+        console.log("🔄 Connection Update:", connection);
+
         if (connection === "open") {
-            console.log("✅ BOT ONLINE - GPT-X ACTIVE");
+            console.log("🤖 GPT-X BOT ONLINE");
         }
 
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
 
-            console.log("❌ CLOSED CODE:", statusCode);
+            console.log("❌ Disconnected Code:", statusCode);
 
             const shouldReconnect =
                 statusCode !== DisconnectReason.loggedOut;
 
-            console.log("♻️ RECONNECT:", shouldReconnect);
+            console.log("♻️ Reconnecting:", shouldReconnect);
 
             if (shouldReconnect) startBot();
         }
     });
 
-    // 🔥 MESSAGE LOG SYSTEM (IMPORTANT FIX)
+    // 🔥 MESSAGE HANDLER (FIXED)
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
-
-        console.log("\n📩 NEW RAW MESSAGE:");
-        console.log(JSON.stringify(msg, null, 2)); // 👈 FULL MESSAGE LOG
 
         if (!msg.message) return;
         if (msg.key.fromMe) return;
@@ -86,12 +80,22 @@ async function startBot() {
             msg.message.extendedTextMessage?.text ||
             "";
 
-        console.log("💬 MESSAGE TEXT:", body); // 👈 TEXT LOG
+        console.log("\n📩 MESSAGE:", body);
 
+        // 🔥 PREFIX SYSTEM FIX
+        const prefix = ".";
+
+        if (!body.startsWith(prefix)) return;
+
+        const command = body.slice(prefix.length).trim().toLowerCase();
+
+        console.log("⚡ COMMAND DETECTED:", command);
+
+        // 🔥 PLUGIN EXECUTION
         for (const plugin of global.plugins) {
             try {
-                if (body.toLowerCase().startsWith(plugin.name)) {
-                    console.log("⚡ COMMAND TRIGGERED:", plugin.name);
+                if (plugin.name === command) {
+                    console.log("✅ EXECUTING:", command);
 
                     await plugin.execute({
                         socket: sock,
@@ -107,7 +111,7 @@ async function startBot() {
         }
     });
 
-    console.log("🚀 BOT STARTING...");
+    console.log("🚀 GPT-X BOT STARTED");
 }
 
 startBot();
