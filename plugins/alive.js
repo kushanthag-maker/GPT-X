@@ -3,7 +3,7 @@ module.exports = {
 
     async execute({ socket, jid }) {
         await socket.sendMessage(jid, {
-            text: "🤖 GPT-X Bot is Alive and Running!"
+            text: "🤖 GPT-X Bot is Alive and Working Perfectly!"
         });
     }
 };
