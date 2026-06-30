@@ -30,7 +30,9 @@ function loadPlugins() {
 loadPlugins();
 
 async function startBot() {
+    // ✅ SESSION (MUST - stable login)
     const { state, saveCreds } = await useMultiFileAuthState("./session");
+
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -42,23 +44,22 @@ async function startBot() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔄 CONNECTION HANDLER
+    // 🔄 CONNECTION
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update;
 
-        console.log("🔄 Connection:", connection);
+        console.log("🔄 Status:", connection);
 
         if (connection === "open") {
             console.log("🤖 GPT-X BOT ONLINE");
         }
 
         if (connection === "close") {
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const code = lastDisconnect?.error?.output?.statusCode;
 
-            console.log("❌ Disconnected:", statusCode);
+            console.log("❌ Closed:", code);
 
-            const shouldReconnect =
-                statusCode !== DisconnectReason.loggedOut;
+            const shouldReconnect = code !== DisconnectReason.loggedOut;
 
             if (shouldReconnect) {
                 console.log("♻️ Reconnecting...");
@@ -67,7 +68,7 @@ async function startBot() {
         }
     });
 
-    // 📩 MESSAGE HANDLER (FIXED)
+    // 📩 MESSAGES
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
 
@@ -81,23 +82,20 @@ async function startBot() {
             msg.message.extendedTextMessage?.text ||
             "";
 
-        console.log("\n📩 MESSAGE:", body);
+        console.log("📩 MSG:", body);
 
         const prefix = config.PREFIX || ".";
 
         if (!body.startsWith(prefix)) return;
 
-        const command = body
-            .slice(prefix.length)
-            .trim()
-            .toLowerCase();
+        const command = body.slice(prefix.length).trim().toLowerCase();
 
-        console.log("⚡ COMMAND:", command);
+        console.log("⚡ CMD:", command);
 
         for (const plugin of global.plugins) {
             try {
                 if (plugin.name === command) {
-                    console.log("✅ EXEC:", command);
+                    console.log("✅ RUN:", command);
 
                     await plugin.execute({
                         socket: sock,
@@ -113,7 +111,7 @@ async function startBot() {
         }
     });
 
-    console.log("🚀 GPT-X BOT STARTED");
+    console.log("🚀 GPT-X STARTED");
 }
 
 startBot();
