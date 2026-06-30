@@ -2,8 +2,7 @@ const {
     default: makeWASocket,
     useMultiFileAuthState,
     fetchLatestBaileysVersion,
-    DisconnectReason,
-    useSingleFileAuthState
+    DisconnectReason
 } = require("@whiskeysockets/baileys");
 
 const P = require("pino");
@@ -28,10 +27,9 @@ function loadPlugins() {
 }
 loadPlugins();
 
-const question = (text) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise((resolve) => rl.question(text, resolve));
-};
+// INPUT HELPER
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
@@ -40,15 +38,16 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: P({ level: "silent" }),
-        printQRInTerminal: false, // QR අක්‍රිය කර ඇත
+        logger: P({ level: "silent" })
     });
 
     // 📱 PAIRING CODE LOGIC
     if (!sock.authState.creds.registered) {
+        console.log("\n------------------------------------------------");
         const phoneNumber = await question("WhatsApp අංකය ඇතුළත් කරන්න (උදා: 947xxxxxxxx): ");
         const code = await sock.requestPairingCode(phoneNumber.trim());
         console.log("🔢 ඔබගේ Pairing Code එක: " + code);
+        console.log("------------------------------------------------\n");
     }
 
     sock.ev.on("creds.update", saveCreds);
@@ -73,10 +72,16 @@ async function startBot() {
 
         for (const plugin of global.plugins) {
             if (plugin.name === command) {
-                await plugin.execute({ socket: sock, msg, jid, body, config });
+                try {
+                    await plugin.execute({ socket: sock, msg, jid, body, config });
+                } catch (e) {
+                    console.log("❌ PLUGIN ERROR:", e.message);
+                }
             }
         }
     });
+
+    console.log("🚀 GPT-X STARTED");
 }
 
 startBot();
