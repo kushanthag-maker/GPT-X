@@ -7,40 +7,26 @@ const {
 
 const P = require("pino");
 const fs = require("fs");
-const readline = require("readline");
 
 const config = require("./config");
 
-// readline for Termux input
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
-function ask(q) {
-    return new Promise(resolve => rl.question(q, resolve));
-}
-
-// Load plugins
 global.plugins = [];
 
+// Load plugins
 function loadPlugins() {
     global.plugins = [];
     const files = fs.readdirSync("./plugins").filter(f => f.endsWith(".js"));
 
     for (const file of files) {
-        try {
-            delete require.cache[require.resolve(`./plugins/${file}`)];
-            const plugin = require(`./plugins/${file}`);
-            global.plugins.push(plugin);
-        } catch (e) {
-            console.log("❌ Plugin Error:", file);
-        }
+        delete require.cache[require.resolve(`./plugins/${file}`)];
+        const plugin = require(`./plugins/${file}`);
+        global.plugins.push(plugin);
     }
 }
 
 loadPlugins();
 
+// 🔥 AUTO RECONNECT SAFE START
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("./session");
     const { version } = await fetchLatestBaileysVersion();
@@ -48,23 +34,25 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: P({ level: "silent" }),
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        logger: P({ level: "silent" })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // CONNECTION
-    sock.ev.on("connection.update", async (update) => {
+    // 🔥 CONNECTION FIX (AUTO RECONNECT)
+    sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update;
 
         if (connection === "open") {
-            console.log("✅ GPT-X Bot Connected Successfully");
+            console.log("🤖 GPT-X BOT ACTIVE");
         }
 
         if (connection === "close") {
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+
             const shouldReconnect =
-                lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                statusCode !== DisconnectReason.loggedOut;
 
             console.log("❌ Disconnected. Reconnecting:", shouldReconnect);
 
@@ -72,28 +60,10 @@ async function startBot() {
         }
     });
 
-    // 🔥 PAIRING CODE SYSTEM (TERMUX)
-    if (!sock.authState.creds.registered) {
-        console.log("\n🔥 GPT-X PAIRING MODE 🔥\n");
-
-        const number = await ask("📱 Enter WhatsApp Number (94XXXXXXXX): ");
-
-        try {
-            const code = await sock.requestPairingCode(number);
-            console.log("\n━━━━━━━━━━━━━━━━━━━━━━");
-            console.log("🔥 YOUR PAIRING CODE:");
-            console.log(code);
-            console.log("━━━━━━━━━━━━━━━━━━━━━━\n");
-
-            console.log("👉 Go WhatsApp > Linked Devices > Link with code");
-        } catch (e) {
-            console.log("❌ Pairing Error:", e.message);
-        }
-    }
-
-    // MESSAGE HANDLER
+    // 🔥 MESSAGE FIX (PUBLIC CHAT WORKING)
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
+
         if (!msg.message) return;
         if (msg.key.fromMe) return;
 
@@ -103,6 +73,9 @@ async function startBot() {
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
             "";
+
+        // DEBUG (important)
+        console.log("📩 New Message:", body);
 
         for (const plugin of global.plugins) {
             try {
